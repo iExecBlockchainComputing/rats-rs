@@ -1,4 +1,4 @@
-use log::error;
+use log::{debug, error};
 
 use crate::cert::dice::cbor::OCBR_TAG_EVIDENCE_INTEL_TEE_REPORT;
 use crate::errors::*;
@@ -58,17 +58,16 @@ impl TdxEvidence {
                     ),
                 ));
             }
-
-            let quote = unsafe { &*(unchecked_quote.as_ptr() as *const sgx_quote4_t) };
-            let expected_quote_len =
-                std::mem::size_of::<sgx_quote4_t>() + quote.signature_data_len as usize;
-            if unchecked_quote.len() != expected_quote_len {
-                Err(Error::kind_with_msg(
-                ErrorKind::TdxMulformedQuote,
-                format!(
-                    "Invalid TDX quote version 4: quote length mismatch and probably got truncated, unchecked_quote.len(): {}, expected: {}",
-                    unchecked_quote.len(), expected_quote_len),
-                ))?;
+            
+            // Add upper bound check similar to rats-tls (https://github.com/inclavare-containers/rats-tls/blob/master/src/core/dice.c#L93) 
+            const MAX_QUOTE_SIZE: usize = 8196; // Same as rats-tls upper bound
+            if unchecked_quote.len() > MAX_QUOTE_SIZE {
+                return Err(Error::kind_with_msg(
+                    ErrorKind::TdxMulformedQuote,
+                    format!(
+                        "Invalid TDX quote version 4: quote length {} is too large, maximum allowed: {} (same as rats-tls: sizeof(attestation_evidence_t) - offsetof(attestation_evidence_t, ecdsa))",
+                        unchecked_quote.len(), MAX_QUOTE_SIZE),
+                ));
             }
         } else if header.version == 5 && header.tee_type == 0x81 {
             if unchecked_quote.len() < std::mem::size_of::<sgx_quote5_t>() {
@@ -248,12 +247,19 @@ pub(crate) fn create_evidence_from_dice(
     raw_evidence: &[u8],
 ) -> Option<Result<TdxEvidence>> {
     if cbor_tag == OCBR_TAG_EVIDENCE_INTEL_TEE_QUOTE {
-        return Some(TdxEvidence::new_from_unchecked(raw_evidence));
+        debug!("Tag matched! Calling TdxEvidence::new_from_unchecked");
+        let result = TdxEvidence::new_from_unchecked(raw_evidence);
+        match &result {
+            Ok(_) => debug!("new_from_unchecked returned Ok"),
+            Err(e) => error!("new_from_unchecked returned Err: {:?}", e),
+        }
+        return Some(result);
     } else if cbor_tag == OCBR_TAG_EVIDENCE_INTEL_TEE_REPORT {
         return Some(Err(Error::kind_with_msg(
             ErrorKind::TdxUnsupportedEvidenceType,
             "Unsupported evidence type: Intel TEE report (TDX report or SGX report type 2)",
         )));
     }
+    error!("Tag did not match, returning None");
     return None;
 }
