@@ -1,30 +1,30 @@
-# rats-rs项目介绍
+# rats-rs Project Introduction
 
-本文主要介绍rats-rs项目的整体架构，以及各模块的功能。
+This document mainly introduces the overall architecture of the rats-rs project and the functions of each module.
 
-## 整体架构
+## Overall Architecture
 
-本项目的架构图如下图所示。
+The architecture diagram of this project is shown in the figure below.
 
 ![](rats-rs-architecture.svg)
 
-本项目最初的设计上，就尽量考虑实现模块化。图中的上层模块对下层模块与调用依赖关系，而同一层级之间的模块之间则并无依赖关联。
+In the initial design of this project, modularization was considered as much as possible. The upper modules in the figure have calling dependencies on the lower modules, while there are no dependency relationships between modules at the same level.
 
-此外，各模块一般有抽象出对应的`trait`类型，并充分利用泛型机制（Generics）和组合设计的模式（Composite）来实现通用性。并在一些方面借助Cargo.toml中的的features机制来进行条件编译，实现功能裁剪。
+In addition, each module generally abstracts corresponding `trait` types and makes full use of generics and composite design patterns to achieve generality. In some aspects, the features mechanism in Cargo.toml is used for conditional compilation to achieve functionality trimming.
 
-图中的最上层为应用程序，相应的示例可以在[这里](/examples/spdm)找到。值得一提的是，rats-rs为上层应用程序暴露了三个不同层次的API接口，从高到低分别为：
+The top layer in the figure is the application layer, and corresponding examples can be found [here](/examples/spdm). It is worth mentioning that rats-rs exposes three different levels of API interfaces for upper-level applications, from high to low:
 
-- **安全会话层API**：最常用的API，可以为上层应用程序提供建立基于远程证明保证的安全会话的层的能力。
-- **X.509证书层API**：该API将暴露带远程证明属性的X.509证书证书的生成和验证接口，适用于那些需要X.509证书，但对其用途有定制需求的场景。
-- **远程证明原语API**：该API可以允许用户用统一的方式使用TEE实例提供的远程证明能力，包括Evidence数据的获取和验证。
+- **Secure Session Layer API**: The most commonly used API, which can provide upper-level applications with the ability to establish secure sessions based on remote attestation guarantees.
+- **X.509 Certificate Layer API**: This API exposes the generation and verification interfaces of X.509 certificates with remote attestation attributes, suitable for scenarios that require X.509 certificates but have customized requirements for their usage.
+- **Remote Attestation Primitive API**: This API allows users to use the remote attestation capabilities provided by TEE instances in a unified way, including Evidence data acquisition and verification.
 
-## 模块功能
+## Module Functions
 
-本项目目前主要包含如下几个模块
+This project currently mainly includes the following modules:
 
-### 远程证明原语
+### Remote Attestation Primitives
 
-该模块包含了不同TEE类型对应的远程证明和验证逻辑。在该模块中，项目提供了对不同TEE类型的抽象，包括`Attester`、`Verifier`、`Evidence`、`Claims`等。对应的trait设计如下：
+This module contains the remote attestation and verification logic corresponding to different TEE types. In this module, the project provides abstractions for different TEE types, including `Attester`, `Verifier`, `Evidence`, `Claims`, etc. The corresponding trait design is as follows:
 
 ```rust
 /// Trait representing generic evidence.
@@ -66,46 +66,44 @@ pub type Claims = IndexMap<String, Vec<u8>>;
 
 ```
 
-每种TEE类型只需要提供trait对应的实现，即可通过组合的方式和项目中的其它组件协同使用。
+Each TEE type only needs to provide the corresponding implementation of the trait to work collaboratively with other components in the project through composition.
 
-对于那些对所使用的具体TEE类型并不敏感的上层应用，为了实现对不同TEE类型实现的自动适配，我们还提供了`AutoAttester`和`AutoVerifier`类型。该类型能够自动判定当前运行环境中的TEE类型，从而向上层应用屏蔽具体TEE相关的代码。
+For upper-level applications that are not sensitive to the specific TEE type used, we also provide `AutoAttester` and `AutoVerifier` types to achieve automatic adaptation to different TEE type implementations. This type can automatically determine the TEE type in the current runtime environment, thus shielding upper-level applications from TEE-specific code.
 
-> 本项目还以features的形式，在编译阶段提供对项目支持的TEE类型进行裁剪的能力。这些能力是通过Cargo.toml中命名为格式为`attester-*`和`verifier-*`的features控制的。
+> This project also provides the ability to trim the TEE types supported by the project at compile time in the form of features. These capabilities are controlled by features named in the format of `attester-*` and `verifier-*` in Cargo.toml.
 
-### 密码算法
+### Cryptographic Algorithms
 
-该模块提供了密码学原语的抽象接口，主要包括各种Hash函数、公钥密码算法的支持。该模块和远程证明原语一样，同样属于项目中非常基础的能力之一，会被诸如X.509证书层、安全会话层等其他模块调用。
+This module provides abstract interfaces for cryptographic primitives, mainly including support for various Hash functions and public key cryptographic algorithms. Like the remote attestation primitives, this module is also one of the very basic capabilities in the project and will be called by other modules such as the X.509 certificate layer and secure session layer.
 
-为了方便使用，并降低模块直接的耦合，本模块使用枚举(enum)多态的方式，对同一类型的算法进行了封装，并对外提供一致的功能接口。
+For convenience and to reduce coupling between modules, this module uses enum polymorphism to encapsulate algorithms of the same type and provides consistent functional interfaces externally.
 
-目前支持的Hash函数有：
+Currently supported Hash functions:
 - SHA-256
 - SHA-384
 - SHA-512
 
-支持的公钥密码算法：
+Supported public key cryptographic algorithms:
 - RSA-2048
 - RSA-3072
 - RSA-4096
 - NIST P-256 (secp256r1)
 
-此外，本模块还允许选择这些密码算法的实现后端，这对于一些对性能和资源限制要求较为苛刻的场景提供了更为友好的选项。目前的后端实现基于[RustCrypto](https://github.com/RustCrypto)（通过`crypto-rustcrypto` feature控制）。未来还将考虑提供基于[ring](https://github.com/briansmith/ring)或者[rust-openssl](https://github.com/sfackler/rust-openssl)的后端实现。
+In addition, this module also allows choosing the implementation backend of these cryptographic algorithms, which provides more friendly options for scenarios with strict performance and resource constraints. The current backend implementation is based on [RustCrypto](https://github.com/RustCrypto) (controlled by the `crypto-rustcrypto` feature). Future implementations based on [ring](https://github.com/briansmith/ring) or [rust-openssl](https://github.com/sfackler/rust-openssl) will also be considered.
 
+### X.509 Certificate Layer
 
-### X.509证书层
+This module mainly provides the implementation of certificate generation and certificate verification logic, exposing two interfaces: `CertBuilder` and `CertVerifier`.
 
-该模块主要提供证书的生成和证书验证逻辑的实现，对外暴露`CertBuilder`和`CertVerifier`两个接口。
+This project refers to the [Interoperable RA-TLS](https://github.com/CCC-Attestation/interoperable-ra-tls) draft and designs a self-signed certificate mode that combines remote attestation Evidence and X.509 certificates, which we simply call DICE certificates. The specific details are described in [this](/docs/core-design-of-cpu-spdm.md) document.
 
-本项目参考[Interoperable RA-TLS](https://github.com/CCC-Attestation/interoperable-ra-tls)草案，设计了一种将远程证明Evidence和X.509证书结合的自签名证书模式，我们将其简称为DICE证书，具体的细节在[这份](/docs/core-design-of-cpu-spdm.md)文档中进行了叙述。
+### Transport Layer
 
+The transport layer module mainly serves the secure session layer, because the data transmission of the secure session layer needs to be built on top of the transport layer, so it can be regarded as a relatively simple thin layer.
 
-### 传输层
+Specifically, for the scenario where the secure session layer runs the SPDM protocol, the transport layer needs to establish a bridge between the communication capabilities provided by the operating system and the SPDM protocol implementation. That is, to implement the corresponding `SpdmDeviceIo` interface in spdm-rs for these different communication methods.
 
-传输层模块主要为安全会话层服务，因为安全会话层的数据传输需要建立在传输层之上，因此它它可以看作是一个比较简单的薄层。
-
-具体来说，针对安全会话层运行的是SPDM协议的场景，传输层则需要在操作系统提供的通信能力和SPDM协议实现之间建立桥梁。即为这些不同的通信方法实现spdm-rs中相应的`SpdmDeviceIo`接口。
-
-SPDM协议的数据包是一个个的报文（Packet），为了让SPDM协议能够在现有的基于流（Stream）的传输层（如TCP、Unix domain Socket、Pipe等）上承载，则需要提供一个分帧方案，将Packet在Stream中传递。为此，我们提供了一个简单的分帧实现`FramedStream`，如下图所示。
+SPDM protocol data packets are individual packets. In order for the SPDM protocol to be carried on existing stream-based transport layers (such as TCP, Unix domain Socket, Pipe, etc.), a framing scheme needs to be provided to transmit Packets in Streams. For this purpose, we provide a simple framing implementation `FramedStream`, as shown in the figure below.
 
 ```txt
  ┌──────────┬────────────────────────┐ 
@@ -114,9 +112,9 @@ SPDM协议的数据包是一个个的报文（Packet），为了让SPDM协议能
  └──────────┴────────────────────────┘ 
 ```
 
-其中，`Packet`是安全会话层产生和需要消耗的SPDM报文。在解析Stream时，首先遇到4字节的Size字段，表示Packet的长度。该字段被放置在每个Packet的前面，接着则是Packet的具体内容。
+Where `Packet` is the SPDM packet generated and consumed by the secure session layer. When parsing the Stream, the 4-byte Size field is encountered first, indicating the length of the Packet. This field is placed in front of each Packet, followed by the specific content of the Packet.
 
-`FramedStream`类型的设计大致如下。
+The design of the `FramedStream` type is roughly as follows:
 
 ```rust
 /// `FramedStream` is a generic framing module that segments a stream of `u8` data (`S`)
@@ -137,11 +135,11 @@ where
 }
 ```
 
-借助泛型，我们可以提供在所有实现了`Read + Write + Send + 'static`的Stream类型（例如TcpStream）上承载安全会话层的能力。这一设计为上层应用带来了便利。
+With the help of generics, we can provide the ability to carry the secure session layer on all Stream types that implement `Read + Write + Send + 'static` (such as TcpStream). This design brings convenience to upper-level applications.
 
-### 安全会话层
+### Secure Session Layer
 
-安全会话层模块旨在提供建立在远程证明之上的任意安全传输层的实现。为了达成这一目标，该模块提供了如下的抽象接口：
+The secure session layer module aims to provide the implementation of arbitrary secure transport layers built on remote attestation. To achieve this goal, this module provides the following abstract interfaces:
 
 ```rust
 #[maybe_async]
@@ -161,13 +159,14 @@ pub trait GenericSecureTransPortRead {
     async fn receive(&mut self, buf: &mut [u8]) -> Result<usize>;
 }
 ```
-涵盖了安全会话层需要对外提供的四个基本能力：握手协商、接受数据、发送数据、关闭会话。目前它包含了SPDM协议的支持，能够完成上述的四个基本能力。
 
-#### SPDM安全会话
+This covers the four basic capabilities that the secure session layer needs to provide externally: handshake negotiation, receiving data, sending data, and closing sessions. Currently, it includes SPDM protocol support and can complete the above four basic capabilities.
 
-SPDM协议的核心实现基于[spdm-rs](https://github.com/ccc-spdm-tools/spdm-rs)项目，我们在该项目的基础上实现了与远程证明过程的结合，并对上层应用提供了Requester和Responder角色的简易封装。
+#### SPDM Secure Session
 
-在spdm-rs中，有一个SPDM传输层（`trait SpdmTransportEncap`）接口，用于规定如何编解码SPDM协议的Packet，spdm-rs自身提供了PCI-DOE和MCTP两种不同的实现。但这一实现是和PCI-DOE协议和MCTP协议定义的其他部分紧耦合的，且被设计用于CPU和外设之间的通信。对此，面向通用的TEE互联互通场景，我们我们提供了一个类似的`struct SimpleTransportEncap`实现，这种消息编码方法生成的Packet结构如下所示：
+The core implementation of the SPDM protocol is based on the [spdm-rs](https://github.com/ccc-spdm-tools/spdm-rs) project. On the basis of this project, we implemented the integration with the remote attestation process and provided simple encapsulation of Requester and Responder roles for upper-level applications.
+
+In spdm-rs, there is an SPDM transport layer (`trait SpdmTransportEncap`) interface that specifies how to encode and decode SPDM protocol Packets. spdm-rs itself provides two different implementations: PCI-DOE and MCTP. However, this implementation is tightly coupled with other parts of the PCI-DOE protocol and MCTP protocol definitions and is designed for communication between CPU and peripherals. For this reason, for general TEE interconnection scenarios, we provide a similar `struct SimpleTransportEncap` implementation. The Packet structure generated by this message encoding method is as follows:
 
 ```txt
  ┌──────────┬────────────────────────┐ 
@@ -176,7 +175,7 @@ SPDM协议的核心实现基于[spdm-rs](https://github.com/ccc-spdm-tools/spdm-
  └──────────┴────────────────────────┘ 
 ```
 
-Type字段定义为enum枚举类型，如下：
+The Type field is defined as an enum type as follows:
 
 ```rust
 enum_builder! {
@@ -194,11 +193,11 @@ enum_builder! {
 }
 ```
 
-我们使用一个1字节的`u8`的tag来区分SPDM消息、受保护的SPDM消息和APP消息这三种类型的消息。
+We use a 1-byte `u8` tag to distinguish between three types of messages: SPDM messages, protected SPDM messages, and APP messages.
 
-基本上我们会遇到三种情况的Packet
+Basically, we will encounter three types of Packets:
 
-1. 未加密的SPDM消息，常见于SPDM握手阶段，此时Session还未建立。
+1. Unencrypted SPDM messages, commonly seen in the SPDM handshake phase when the Session has not been established yet.
 
     ```txt
     ┌──────────┬────────────────────────┐ 
@@ -207,7 +206,7 @@ enum_builder! {
     └──────────┴────────────────────────┘ 
     ```
 
-2. 加密的SPDM消息，常见于SPDM会话过程中，此时，Session已经建立，Payload中传递的是使用协商好的会话密钥进行了加密和完整性保护的消息。
+2. Encrypted SPDM messages, commonly seen during SPDM sessions when the Session has been established, and the Payload contains messages that have been encrypted and integrity-protected using the negotiated session key.
 
     ```txt
     ┌──────────┬────────────────────────┐ 
@@ -215,9 +214,9 @@ enum_builder! {
     │  (0x01)  │ (Encrypted SPDM Packet)│ 
     └──────────┴────────────────────────┘ 
     ```
-    针对Payload中加密消息内容的不同，可细分为两种情况
+    Depending on the different content of encrypted messages in the Payload, it can be subdivided into two situations:
 
-    - 加密消息的明文是一段SPDM消息，如KEY_UPDATE等消息
+    - The plaintext of the encrypted message is an SPDM message, such as KEY_UPDATE and other messages
 
         ```txt
         ┌──────────┬────────────────────────┐ 
@@ -226,7 +225,7 @@ enum_builder! {
         └──────────┴────────────────────────┘ 
         ```
 
-    - 加密消息的明文是一段APP消息，其内容是任意的上层应用要传递的数据。
+    - The plaintext of the encrypted message is an APP message, and its content is arbitrary data that the upper-level application wants to transmit.
 
         ```txt
         ┌──────────┬────────────────────────┐ 
@@ -235,33 +234,32 @@ enum_builder! {
         └──────────┴────────────────────────┘ 
         ```
 
-出于安全考虑，出现以上情况之外的Packet时，或者出现密文解码失败时均被认为是不合法的消息。
+For security reasons, Packets that do not fall into the above categories or fail to decode ciphertext are considered illegal messages.
 
-### 对spdm-rs项目的改写
-由于spdm-rs项目的实现代码与本项目的设计目标之间存在一些差距，我们对spdm-rs项目进行了fork和修改定制。主要包含以下修改：
+### Modifications to the spdm-rs Project
 
-1. 为了给上层应用提供更为便捷的数据收发接口，我们调整了spdm-rs在处理APP消息（app_message）时的逻辑（在`ResponderContext::process_message()`中）。剔换掉了我们不需要的`SpdmAppMessageHandler`回调函数。
+Due to some gaps between the implementation code of the spdm-rs project and the design goals of this project, we forked and modified the spdm-rs project for customization. The main modifications include:
 
-2. 对spdm-rs中的回调逻辑进行改写，剔除将一些全局的、类似于c的函数指针的callback实现。并对关键部分抽象成trait接口。
+1. To provide more convenient data sending and receiving interfaces for upper-level applications, we adjusted the logic of spdm-rs when processing APP messages (app_message) in `ResponderContext::process_message()`. We removed the `SpdmAppMessageHandler` callback function that we don't need.
 
-    具体来说，我们从spdm-rs中额外新增了4个trait，并在本项目中的其他模块的基础上提供了这些trait相应的实现：
+2. Rewrite the callback logic in spdm-rs, removing some global, C-like function pointer callback implementations and abstracting key parts into trait interfaces.
 
-    - `trait SecretAsymSigner`：SPDM通信方的私钥和签名逻辑，在SPDM协商阶段的多个消息中，均会使用该接口完成对给定数据的签名。在对应的实现中，使用了X.509证书层生成的随机密钥，并调用了密码算法层的签名逻辑实现。
+    Specifically, we added 4 additional traits from spdm-rs and provided corresponding implementations of these traits based on other modules in this project:
 
-    - `trait CertProvider`：SPDM通信方的证书提供逻辑，该证书用于Responder侧的身份验证。这部分使用X.509证书层的CertBuilder实现
-    
-    - `trait CertValidationStrategy`：对SPDM通信中对端发来的证书进行验证的逻辑。这部分使用X.509证书层的CertVerifier实现
+    - `trait SecretAsymSigner`: The private key and signature logic of the SPDM communication party, which will be used to complete the signature of given data in multiple messages during the SPDM negotiation phase. In the corresponding implementation, random keys generated by the X.509 certificate layer are used, and the signature logic implementation of the cryptographic algorithm layer is called.
 
-    - `trait MeasurementProvider`：提供SPDM通信中需要使用的的measurements，这部分使用远程证明原语层的功能实现。
+    - `trait CertProvider`: The certificate provision logic of the SPDM communication party, which is used for identity verification on the Responder side. This part uses the CertBuilder implementation of the X.509 certificate layer.
 
-3. 针对spdm-rs项目中存在的若干逻辑错误的修复。
+    - `trait CertValidationStrategy`: The logic for verifying certificates sent by the peer in SPDM communication. This part uses the CertVerifier implementation of the X.509 certificate layer.
 
-上述对spdm-rs的变更并不会对SPDM协议的交互方式和消息格式设计带来影响。
+    - `trait MeasurementProvider`: Provides the measurements needed in SPDM communication, which is implemented using the functionality of the remote attestation primitive layer.
 
-### 用户接口
-该模块还对协议的整体流程进行了封装，提供了`SpdmRequesterBuilder`和`SpdmResponderBuilder`两个接口，让上层APP能更方便地建立SPDM会话。具体的使用方式可以参考[示例程序](/examples/spdm)。
+3. Fix several logical errors in the spdm-rs project.
 
+The above changes to spdm-rs will not affect the interaction method and message format design of the SPDM protocol.
 
-> 值得一提的是，本项目的目标并不止步于提供SPDM协议的支持，未来还可以被扩展为基于TLS、DTLS等在协议的基础上提供安全会话层。
+### User Interface
 
+This module also encapsulates the overall protocol flow and provides two interfaces: `SpdmRequesterBuilder` and `SpdmResponderBuilder`, making it easier for upper-level applications to establish SPDM sessions. For specific usage, please refer to the [sample programs](/examples/spdm).
 
+> It is worth mentioning that the goal of this project is not limited to providing SPDM protocol support. In the future, it can also be extended to provide secure session layers based on protocols such as TLS and DTLS.

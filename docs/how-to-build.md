@@ -1,17 +1,16 @@
+# Building
 
-# 编译
-
-## 环境准备
+## Environment Setup
 
 ### Docker
 
-本项目提供提供了以Docker容器形式的构建开发环境，可以使用如下命令拉取构建开发环境的镜像。
+This project provides a build development environment in the form of Docker containers. You can use the following command to pull the build development environment image.
 
 ```sh
 docker pull ghcr.io/inclavare-containers/rats-rs:master
 ```
 
-或者也可以直接以Dockerfile的形式构建
+Or you can build directly using the Dockerfile
 
 ```sh
 git clone git@github.com:inclavare-containers/rats-rs.git
@@ -19,25 +18,25 @@ cd rats-rs
 docker build --tag rats-rs:master .
 ```
 
-接着根据不同的TEE类型，使用相应命令启动环境
+Then, depending on the TEE type, use the corresponding command to start the environment:
 
-- SGX实例：
+- SGX instance:
 
     ```sh
     docker run -it --privileged --device=/dev/sgx_enclave --device=/dev/sgx_provision rats-rs:master bash
     ```
 
-- TDX实例：
+- TDX instance:
 
     ```sh
     docker run -it --privileged --device=/dev/tdx_guest rats-rs:master bash
     ```
 
-### 手动安装依赖
+### Manual Dependency Installation
 
-下面提供Ubuntu 22.04发行版上的依赖安装流程，在其它发行版上的流程比较类似，可以参考[Intel_SGX_SW_Installation_Guide_for_Linux.pdf](https://download.01.org/intel-sgx/latest/dcap-latest/linux/docs/Intel_SGX_SW_Installation_Guide_for_Linux.pdf)。
+The following provides the dependency installation process on Ubuntu 22.04. The process on other distributions is similar and can be referenced from [Intel_SGX_SW_Installation_Guide_for_Linux.pdf](https://download.01.org/intel-sgx/latest/dcap-latest/linux/docs/Intel_SGX_SW_Installation_Guide_for_Linux.pdf).
 
-1. 安装基础依赖库
+1. Install basic dependency libraries
 
     ```sh
     echo "deb http://cn.archive.ubuntu.com/ubuntu bionic main" >> /etc/apt/sources.list
@@ -49,27 +48,28 @@ docker build --tag rats-rs:master .
         clang jq
     ```
 
-2. 安装Rust工具链
+2. Install Rust toolchain
 
     ```sh
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path
     ```
-    将下面语句添加到`~/.bashrc`末尾
+    Add the following statement to the end of `~/.bashrc`
     ```sh
     export PATH=/root/.cargo/bin:$PATH
     ```
 
-    （Optional）安装用于计算代码覆盖率的工具`llvm-tools-preview`
+    (Optional) Install `llvm-tools-preview` for code coverage calculation
     ```
     rustup component add llvm-tools-preview
     ```
 
-3. 本项目使用[just](https://github.com/casey/just/)工具来封装本项目的构建、测试、运行流程，因此首先需要安装just。
+3. This project uses the [just](https://github.com/casey/just/) tool to encapsulate the build, test, and run processes of this project, so just needs to be installed first.
 
     ```sh
     cargo install just
     ```
-4. 安装Intel SGX LVI mitigated toolchain
+
+4. Install Intel SGX LVI mitigated toolchain
 
     ```sh
     wget https://download.01.org/intel-sgx/sgx-linux/$SGX_SDK_VERSION/as.ld.objdump.r4.tar.gz && \
@@ -77,9 +77,9 @@ docker build --tag rats-rs:master .
         rm -rf external && rm -rf as.ld.objdump.r4.tar.gz
     ```
 
-5. 安装Intel SGX SDK
+5. Install Intel SGX SDK
 
-    > 依赖于Intel SGX SDK version >= 2.23
+    > Depends on Intel SGX SDK version >= 2.23
 
     ```sh
     SGX_SDK_VERSION=2.23
@@ -89,9 +89,9 @@ docker build --tag rats-rs:master .
         echo -e 'no\n/opt/intel\n' | ./sgx_linux_x64_sdk_$SGX_SDK_RELEASE_NUMBER.bin
     ```
 
-6. 安装SGX DCAP软件包
+6. Install SGX DCAP software packages
 
-    引入Intel官方提供的在线apt repo
+    Add Intel's official online apt repo
 
     ```sh
     echo "deb [arch=amd64] https://download.01.org/intel-sgx/sgx_repo/ubuntu focal main" | tee /etc/apt/sources.list.d/intel-sgx.list && \
@@ -99,7 +99,7 @@ docker build --tag rats-rs:master .
     apt-get update -y
     ```
 
-    安装SGX DCAP软件包
+    Install SGX DCAP software packages
 
     ```sh
     SGX_SDK_VERSION=2.23
@@ -111,8 +111,7 @@ docker build --tag rats-rs:master .
         libsgx-dcap-default-qpl-dev="$SGX_DCAP_VERSION*"
     ```
 
-
-7. 安装occlum，用于在occlum环境中运行rats-rs样例程序
+7. Install occlum, used to run rats-rs sample programs in the occlum environment
 
     ```sh
     echo 'deb [arch=amd64] https://occlum.io/occlum-package-repos/debian focal main' | tee /etc/apt/sources.list.d/occlum.list
@@ -121,45 +120,45 @@ docker build --tag rats-rs:master .
     apt-get install -y libfuse2 occlum occlum-toolchains-glibc
     ```
 
-    将下面语句添加到`~/.bashrc`末尾
+    Add the following statement to the end of `~/.bashrc`
 
     ```sh
     export PATH="/opt/occlum/build/bin:${PATH}"
     ```
 
-8. （针对TDX实例）安装TDX Attestation library
+8. (For TDX instances) Install TDX Attestation library
     ```sh
     SGX_DCAP_VERSION=1.20
     apt-get install -y libtdx-attest-dev="$SGX_DCAP_VERSION*"
     ```
 
-## 编译
+## Building
 
-如果你准备单独构建该项目，或者简单尝试该项目中提供的样例程序，可以使用如下方法来构建代码
+If you are preparing to build this project separately or simply try the sample programs provided in this project, you can use the following method to build the code:
 
-1. 拉取源码
+1. Pull the source code
     
     ```sh
     git clone git@github.com:inclavare-containers/rats-rs.git
     cd rats-rs
     ```
 
-2. 准备
+2. Prepare
 
     ```sh
     just prepare-repo
     ```
 
-3. 构建项目
+3. Build the project
 
     ```sh
     cargo build
     ```
 
-4. （可选）构建样例程序
+4. (Optional) Build sample programs
 
     ```sh
     cargo build -p spdm
     ```
 
-    对于如何运行样例程序，请参考examples目录下的[例子](/examples/spdm)。
+    For how to run sample programs, please refer to the [examples](/examples/spdm) in the examples directory.

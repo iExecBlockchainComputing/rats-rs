@@ -1,40 +1,40 @@
-# 测试
+# Testing
 
-为了提高代码健壮性，发现潜在的程序缺陷或逻辑漏洞，在项目开发过程中还应注重测试程序的编写，为此，本项目中按照rust程序惯例编写了单元测试。
+To improve code robustness and discover potential program defects or logical vulnerabilities, attention should be paid to writing test programs during project development. For this purpose, unit tests have been written following Rust program conventions in this project.
 
-## 单元测试
+## Unit Tests
 
-本项目目前支持在多种不同的TEE环境中运行。由于部分逻辑依赖于特定TEE环境的支持，一些测试在非TEE环境中会被跳过，因此建议在非TEE环境和TEE环境中分别运行一次单元测试。
+This project currently supports running in multiple different TEE environments. Since some logic depends on specific TEE environment support, some tests will be skipped in non-TEE environments. Therefore, it is recommended to run unit tests separately in non-TEE and TEE environments.
 
-- 在非TEE环境、或TDX环境中运行单元测试
+- Run unit tests in non-TEE environment or TDX environment
 
     ```sh
     just run-test-in-host
     ```
 
-- 在Occlum环境运行单元测试
+- Run unit tests in Occlum environment
 
     ```sh
     just run-test-in-occlum
     ```
 
-本项目还以Github Action的形式添加了[自动化测试](/.github/workflows/build-and-test.yaml)（CI/CD），针对每一个新的Commit/Pull Request运行单元测试，以确保新的提交不会破坏已有功能。尽管如此，还是应该在新功能添加时尽可能的创建对应的单元测试。
+This project also adds [automated testing](/.github/workflows/build-and-test.yaml) in the form of Github Actions (CI/CD), which runs unit tests for every new Commit/Pull Request to ensure that new submissions do not break existing functionality. Nevertheless, corresponding unit tests should be created as much as possible when adding new features.
 
-## 代码覆盖率
+## Code Coverage
 
-计算代码覆盖率，对程序测试的覆盖范围认知，和单元测试的编写具有指引作用。本项目提供了[基于插桩的代码覆盖率](https://doc.rust-lang.org/rustc/instrument-coverage.html#instrumentation-based-code-coverage)（Instrumentation-based Code Coverage）计算，能够在运行单元测试的同时计算代码覆盖率结果。
+Calculating code coverage provides guidance for understanding the coverage scope of program testing and writing unit tests. This project provides [instrumentation-based code coverage](https://doc.rust-lang.org/rustc/instrument-coverage.html#instrumentation-based-code-coverage) calculation, which can calculate code coverage results while running unit tests.
 
-项目将相关流程进行了封装，可以直接使用如下语句运行覆盖率计算
+The project has encapsulated the related processes, and you can directly use the following statement to run coverage calculation:
 
 ```sh
 just code-coverage
 ```
 > [!IMPORTANT]  
-> 由于部分单元测试依赖于特定TEE环境的支持，这意味着完整的代码覆盖率的计算需要在不同的TEE环境中分别运行，再进行合并才能得出准确的覆盖率情况。在目前的实现中，上述语句需要在SGX平台上运行，且只会计算非TEE环境和Occlum环境（SGX）的代码覆盖率。
+> Since some unit tests depend on specific TEE environment support, this means that complete code coverage calculation needs to be run in different TEE environments separately, and then merged to obtain accurate coverage. In the current implementation, the above statement needs to be run on an SGX platform and will only calculate code coverage for non-TEE and Occlum environments (SGX).
 >
-> 出现这种限制是因为用于开发的TDX环境和SGX环境不在同一个实例上，因此未来还需要改进代码以实现多TEE实例上代码覆盖率数据的自动化合并。
+> This limitation exists because the TDX and SGX environments used for development are not on the same instance, so future improvements are needed to implement automated merging of code coverage data across multiple TEE instances.
 
-程序实例输出如下：
+The program instance output is as follows:
 ```txt
 Filename                                     Regions    Missed Regions     Cover   Functions  Missed Functions  Executed       Lines      Missed Lines     Cover    Branches   Missed Branches     Cover
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -64,12 +64,12 @@ tee/mod.rs                                        54                 5    90.74%
 TOTAL                                           1254               414    66.99%         180                42    76.67%        2637               575    78.19%         136                55    59.56%
 ```
 
-输出显示行覆盖率已达到78.19%
+The output shows that line coverage has reached 78.19%
 
-相关产物将存放在`target-sbcc/coverage/`目录下。除了命令行中输出的代码覆盖率，还可以通过浏览器查看每个文件中的代码执行覆盖情况，首先需要启动一个静态文件服务：
+Related artifacts will be stored in the `target-sbcc/coverage/` directory. In addition to the code coverage output in the command line, you can also view the code execution coverage in each file through a browser. First, you need to start a static file server:
 
 ```sh
 python3 -m http.server --directory target-sbcc/coverage/www/
 ```
 
-然后在浏览器中打开 http://localhost:8000/ 即可查看。
+Then open http://localhost:8000/ in your browser to view.

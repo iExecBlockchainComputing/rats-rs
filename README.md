@@ -3,41 +3,41 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 
-rats-rs是一个纯Rust实现的TEE远程证明库，它的最终目标是让开发者能够方便地将远程证明能力集成到应用程序的各个方面。它还包含了一个基于SPDM协议的安全会话层实现，能够为与TEE环境的通信提供类似于TLS的安全加密层。
+rats-rs is a pure Rust implementation of a TEE remote attestation library. Its ultimate goal is to enable developers to easily integrate remote attestation capabilities into various aspects of their applications. It also includes a secure session layer implementation based on the SPDM protocol, which can provide a TLS-like secure encryption layer for communication with TEE environments.
 
-## 关键特性
+## Key Features
 <!-- Key features -->
 
-- 纯Rust实现
-- 提供易于使用的生成器模式(Builder Pattern)API
-- 对不同TEE类型的可扩展性
-- 为上层应用提供三种层次的API
-- 支持指定证书使用的加密算法
-- 自动检测当前运环境TEE类型
-- 支持基于features的功能剪裁
+- Pure Rust implementation
+- Easy-to-use Builder Pattern API
+- Extensibility for different TEE types
+- Three levels of API for upper-level applications
+- Support for specifying cryptographic algorithms used by certificates
+- Automatic detection of current runtime TEE type
+- Feature-based functionality trimming
 
-## 支持的TEE类型
+## Supported TEE Types
 <!-- Supported TEE types -->
 
-本项目在支持的TEE类型方面采用了模块化设计，目前对不同TEE类型的支持情况如下：
+This project adopts a modular design in supporting different TEE types. The current support status for different TEE types is as follows:
 
 | SGX DCAP(Occlum) | TDX | SEV-SNP | CSV | CCA |
 |------------------|-----|---------|-----|-----|
 | ✔️               | ✔️  | 🚧      | 🚧  | 🚧  |
 
 
-## 快速开始
+## Quick Start
 <!-- Quick start -->
 
-接下来的流程将指引你在SGX实例上运行rats-rs的样例程序spdm-echosvr，其源码可以在[这里](/examples/spdm/)找到。
+The following workflow will guide you through running the rats-rs sample program spdm-echosvr on an SGX instance. The source code can be found [here](/examples/spdm/).
 
-1. 首先准备rats-rs的构建环境，建议直接使用我们预构建的Docker容器
+1. First, prepare the rats-rs build environment. It is recommended to use our pre-built Docker container directly
 
     ```sh
     docker run -it --privileged --device=/dev/sgx_enclave --device=/dev/sgx_provision ghcr.io/inclavare-containers/rats-rs:master bash
     ```
 
-2. Clone代码并编译样例程序
+2. Clone the code and compile the sample program
     
     ```sh
     git clone git@github.com:inclavare-containers/rats-rs.git
@@ -48,53 +48,53 @@ rats-rs是一个纯Rust实现的TEE远程证明库，它的最终目标是让开
     cargo build -p spdm
     ```
 
-3. 运行Server端程序
+3. Run the server-side program
 
     ```sh
     just run-in-occlum echo-server --attest-self --listen-on-tcp 127.0.0.1:8080
     ```
 
-4. 运行Client端程序（在新的终端中）
+4. Run the client-side program (in a new terminal)
 
     ```sh
     just run-in-host echo-client --verify-peer --connect-to-tcp 127.0.0.1:8080
     ```
 
-    你将从程序日志中观测到Client和Server之间的交互，并且可以使用环境变量`RATS_RS_LOG_LEVEL`来控制日志级别。
+    You will observe the interaction between the Client and Server in the program logs, and you can use the environment variable `RATS_RS_LOG_LEVEL` to control the log level.
 
-    关于示例程序的更多详细信息，请查看[这份](/examples/spdm/README.md)文档
+    For more details about the sample program, please refer to [this](/examples/spdm/README.md) document.
 
-## 作为依赖使用
+## Use as a Dependency
 
-将以下内容添加到你的`Cargo.toml`文件
+Add the following to your `Cargo.toml` file:
 
 ```toml
 [dependencies]
 rats-rs = {git = "https://github.com/inclavare-containers/rats-rs", branch = "master"}
 ```
 
-要开始使用rats-rs的API，建议参考[示例程序](/examples/spdm/)。
+To start using the rats-rs API, it is recommended to refer to the [sample programs](/examples/spdm/).
 
-此外值得一提的是，rats-rs的编译和运行依赖于一些系统库，你可以在[这里](/docs/how-to-build.md)找到完整的构建环境搭建流程。
+It is also worth mentioning that rats-rs compilation and runtime depend on some system libraries. You can find the complete build environment setup process [here](/docs/how-to-build.md).
 
-## 对于开发人员
+## For Developers
 
-本项目采用[just](https://github.com/casey/just/)工具来封装一些自动化流程，诸如测试、运行、代码覆盖率计算等。它与Makefile非常相似，当你需要引入新的流程时，请尽量将其添加到[justfile](/justfile)中。
+This project uses the [just](https://github.com/casey/just/) tool to encapsulate some automation processes, such as testing, running, code coverage calculation, etc. It is very similar to Makefile. When you need to introduce new processes, please try to add them to the [justfile](/justfile).
 
-在开始编码之前，你可以先阅读[docs](/docs/)下的文档。
+Before you start coding, you can first read the documentation under [docs](/docs/).
 
-## 项目文档
+## Project Documentation
 
-大部分文档都归类在[docs](/docs/)目录下，这里列举出一些相对重要的文档，方便开始接触本项目。
+Most documents are categorized in the [docs](/docs/) directory. Here are some relatively important documents to facilitate getting started with this project:
 
-- [环境搭建与项目构建指引](/docs/how-to-build.md)
-- [测试指引与代码覆盖率](/docs/how-to-run-test.md)
-- [项目整体架构与模块功能描述](/docs/architecture-of-the-project.md)
-- [CPU-SPDM协议核心设计思路](/docs/core-design-of-cpu-spdm.md)
-- [示例程序构建与运行说明](/examples/spdm/README.md)
-- [CPU-TEE SPDM协议标准化文档：CPU TEE Secured Messages using SPDM Binding Specification](/docs/CPU%20TEE%20Secured%20Messages%20using%20SPDM%20Binding%20Specification.pdf)
+- [Environment Setup and Project Build Guide](/docs/how-to-build.md)
+- [Testing Guide and Code Coverage](/docs/how-to-run-test.md)
+- [Project Architecture and Module Function Description](/docs/architecture-of-the-project.md)
+- [CPU-SPDM Protocol Core Design](/docs/core-design-of-cpu-spdm.md)
+- [Sample Program Build and Run Instructions](/examples/spdm/README.md)
+- [CPU-TEE SPDM Protocol Standardization Document: CPU TEE Secured Messages using SPDM Binding Specification](/docs/CPU%20TEE%20Secured%20Messages%20using%20SPDM%20Binding%20Specification.pdf)
 
 
 ## License
 
-该项目使用Apache License 2.0 许可证授权
+This project is licensed under the Apache License 2.0

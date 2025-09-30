@@ -1,20 +1,19 @@
 # spdm
 
-该目录下是一个用于演示上层应用使用rats-rs进行开发的样例程序`spdm`，主要涵盖了使用rats-rs提供的基于远程证明和SPDM协议进行安全通信的实例。
+This directory contains a sample program `spdm` for demonstrating how upper-level applications use rats-rs for development. It mainly covers examples of secure communication using remote attestation and SPDM protocols provided by rats-rs.
 
-该样例程序`spdm`目前主要涵盖两个例子`spdm-echosvr`和`spdm-tunnel`。为减少重复代码，这两个例子被集成在同一个示例程序的不同子命令里，接下来将分别介绍这两个例子的使用。
+The sample program `spdm` currently covers two examples: `spdm-echosvr` and `spdm-tunnel`. To reduce code duplication, these two examples are integrated into different subcommands of the same sample program. The usage of these two examples will be introduced separately below.
 
+## Building
 
-## 构建
+First, refer to the [build documentation](/docs/how-to-build.md) to complete the build environment setup. We recommend using Docker containers directly to quickly establish a build environment.
 
-首先，参考[构建文档](/docs/how-to-build.md)完成构建环境的搭建，我们推荐直接使用Docker容器来快速建立构建环境。
-
-接下来，使用如下命令构建本样例程序
+Next, use the following command to build this sample program:
 ```sh
 cargo build -p spdm
 ```
 
-可以使用`target/debug/spdm --help`命令查看该样例程序的命令行参数
+You can use the `target/debug/spdm --help` command to view the command-line parameters of this sample program:
 ```txt
 Usage: spdm <COMMAND>
 
@@ -32,66 +31,66 @@ Options:
 
 ## spdm-echosvr
 
-该例子演示了如何创建一个运行于TCP流之上的SPDM安全通信外壳并在其中进行通信。对应的是示例程序`spdm`中的`echo-server`和`echo-client`这两个子命令，分别对应了server端和client端。
+This example demonstrates how to create an SPDM secure communication shell running on TCP streams and communicate within it. It corresponds to the `echo-server` and `echo-client` subcommands in the sample program `spdm`, which represent the server and client sides respectively.
 
-在与server端建立SPDM会话后，client端会持续随机生成数据并将其发送到server端，随后server端将数据发回到client端。旨在展示使用rats-rs实现由远程证明保证的双向安全数据传输的能力。
+After establishing an SPDM session with the server, the client continuously generates random data and sends it to the server, and then the server sends the data back to the client. This aims to demonstrate the ability to implement bidirectional secure data transmission guaranteed by remote attestation using rats-rs.
 
-该程序支持在非TEE环境、基于SGX的Occlum环境、TDX虚拟机环境运行。以下提供一个在Occlum环境中的简单运行方法，更详细的参数可以通过指定`--help`选项了解。
+This program supports running in non-TEE environments, SGX-based Occlum environments, and TDX virtual machine environments. The following provides a simple running method in the Occlum environment. More detailed parameters can be learned by specifying the `--help` option.
 
-1. 在Occlum中运行server端
+1. Run the server in Occlum
 
     ```sh
     just run-in-occlum echo-server --attest-self --listen-on-tcp 127.0.0.1:8080
     ```
 > [!IMPORTANT]  
-> `--attest-self`选项指定服务端需要作为attester向对端证明自己的身份，当该选项被指定时，必须在某种TEE环境中运行。
+> The `--attest-self` option specifies that the server needs to act as an attester to prove its identity to the peer. When this option is specified, it must be run in some TEE environment.
 
-2. 运行client端
+2. Run the client
 
-    在该例子中使用的是单向远程证明，client端不需要向peer证明自己身份，因此，既可以运行在非TEE环境，也可以运行在TEE环境。
+    This example uses one-way remote attestation, so the client does not need to prove its identity to the peer. Therefore, it can run in either a non-TEE environment or a TEE environment.
 
-    例如，运行在非TEE环境：
+    For example, running in a non-TEE environment:
     ```sh
     just run-in-host echo-client --verify-peer --connect-to-tcp 127.0.0.1:8080
     ```
 
-    或者，运行在Occlum环境：
+    Or, running in an Occlum environment:
     ```sh
     just run-in-occlum echo-client --verify-peer --connect-to-tcp 127.0.0.1:8080
     ```
 
 > [!NOTE]
-> 可使用环境变量`RATS_RS_LOG_LEVEL`来控制该程序启用的日志级别，环境变量的取值为`error`, `warn`, `info`, `debug`和`trace`，默认值为`trace`
+> You can use the environment variable `RATS_RS_LOG_LEVEL` to control the log level enabled by this program. The environment variable values are `error`, `warn`, `info`, `debug`, and `trace`, with the default value being `trace`.
 
 ## spdm-tunnel
 
-针对一些不期望对业务代码进行任何修改，或者并不拥有业务程序源码，但是仍然期望引入安全通信能力的场景，可以通过建立一个隧道来解决这种需求。该例子演示了在TEE实例和非TEE实例之间建立TCP转发的能力。
+For scenarios where you don't want to modify business code at all, or don't have the source code of business programs, but still want to introduce secure communication capabilities, you can solve this need by establishing a tunnel. This example demonstrates the ability to establish TCP forwarding between TEE instances and non-TEE instances.
 
-该示例同样包含server端和client端，分别对应示例程序`spdm`中的`tunnel-server`和`tunnel-client`这两个子命令。
+This example also includes server and client sides, corresponding to the `tunnel-server` and `tunnel-client` subcommands in the sample program `spdm`.
 
 ![tunnel](src/tunnel/tunnel.svg)
 
-1. 在TDX实例中运行一个nginx服务，以模拟业务场景中，在TDX实例中运行的业务服务端程序。
+1. Run an nginx service in a TDX instance to simulate a business service program running in a TDX instance in a business scenario.
 
     ```sh
     nginx -c `realpath ./examples/spdm/src/tunnel/nginx.conf`
     ```
 
-    该nginx将监听在`9091`端口，并暴露一个nginx默认页。
+    This nginx will listen on port `9091` and expose a default nginx page.
 
-2. 在TDX实例中运行server端
+2. Run the server in the TDX instance
 
     ```sh
     just run-in-host tunnel-server --attest-self --listen-on-tcp 127.0.0.1:8080 --upstream 127.0.0.1:9091
     ```
-    该程序将在`127.0.0.1:8080`监听来自client端的请求，并将SPDM安全会话中的数据转发到上游`127.0.0.1:9091`的nginx服务
+    This program will listen for requests from clients on `127.0.0.1:8080` and forward data from the SPDM secure session to the upstream nginx service at `127.0.0.1:9091`.
 
-3. 在非TEE环境中运行client端
+3. Run the client in a non-TEE environment
 
     ```sh
     just run-in-host tunnel-client --verify-peer --connect-to-tcp 127.0.0.1:8080 --ingress 127.0.0.1:9090
     ```
 
-    该程序将在`127.0.0.1:9090`监听来自业务client端（如浏览器）的发来的TCP连接请求，并将其中数据经过SPDM安全会话转发到上游的`127.0.0.1:8080`spdm-tunnel server端。
+    This program will listen for TCP connection requests from business clients (such as browsers) on `127.0.0.1:9090` and forward the data through the SPDM secure session to the upstream `127.0.0.1:8080` spdm-tunnel server.
 
-4. 在非TEE环境中启动浏览器访问`http://127.0.0.1:9090/`，或者使用`curl http://127.0.0.1:9090/`测试。将观测到浏览器中正确回显了nginx的默认页内容。
+4. Start a browser in a non-TEE environment to access `http://127.0.0.1:9090/`, or use `curl http://127.0.0.1:9090/` for testing. You will observe that the browser correctly displays the nginx default page content.
