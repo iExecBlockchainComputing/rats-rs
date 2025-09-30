@@ -11,9 +11,11 @@ run-in-occlum *args:
   cargo build -p spdm
   scripts/run_exe_in_occlum.sh target/debug/spdm {{args}}
 
-run-in-host *args:
-  cargo build -p spdm
+run-in-host-spdm *args:
   target/debug/spdm {{args}}
+
+run-in-host-tls *args:
+  target/debug/tls {{args}}
 
 run-test-in-occlum *args:
   cargo test --lib rats-rs --no-run

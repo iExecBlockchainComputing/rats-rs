@@ -45,19 +45,19 @@ The following workflow will guide you through running the rats-rs sample program
     
     just prepare-repo
 
-    cargo build -p spdm
+    cargo build -p spdm # or "cargo build -p tls"
     ```
 
 3. Run the server-side program
 
     ```sh
-    just run-in-occlum echo-server --attest-self --listen-on-tcp 127.0.0.1:8080
+    just run-in-host-spdm echo-server --attest-self --listen-on-tcp 127.0.0.1:8080 # Make sure to be root!!
     ```
 
 4. Run the client-side program (in a new terminal)
 
     ```sh
-    just run-in-host echo-client --verify-peer --connect-to-tcp 127.0.0.1:8080
+    just run-in-host-spdm echo-client --verify-peer --connect-to-tcp 127.0.0.1:8080
     ```
 
     You will observe the interaction between the Client and Server in the program logs, and you can use the environment variable `RATS_RS_LOG_LEVEL` to control the log level.
