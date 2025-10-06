@@ -11,7 +11,7 @@ use crate::{
     errors::*,
     tee::{
         sgx_dcap::evidence, AutoAttester, AutoEvidence, AutoVerifier, GenericEvidence,
-        GenericVerifier,
+        GenericVerifier, claims::Claims,
     },
     transport::{GenericSecureTransPort, GenericSecureTransPortRead, GenericSecureTransPortWrite},
 };
@@ -46,6 +46,7 @@ pub struct TlsClientBuilder {
     verify: SSL_verify_cb,
     stream: Option<Box<dyn GetFd>>,
     attest_self: bool,
+    custom_claims: Option<Claims>,
 }
 
 impl TlsClientBuilder {
@@ -69,6 +70,7 @@ impl TlsClientBuilder {
             let privkey = DefaultCrypto::gen_private_key(crate::crypto::AsymmetricAlgo::Rsa2048)?;
             c.use_privkey(&privkey)?;
             let cert = CertBuilder::new(AutoAttester::new(), HashAlgo::Sha256)
+                .with_claims(self.custom_claims.unwrap())
                 .build_with_private_key(&privkey)
                 .await?
                 .cert_to_der()?;
@@ -88,11 +90,16 @@ impl TlsClientBuilder {
         self.attest_self = attest_self;
         self
     }
+    pub fn with_custom_claims(mut self, claims: Claims) -> Self {
+        self.custom_claims = Some(claims);
+        self
+    }
     pub fn new() -> Self {
         Self {
             verify: None,
             stream: None,
             attest_self: false,
+            custom_claims: None,
         }
     }
 }
