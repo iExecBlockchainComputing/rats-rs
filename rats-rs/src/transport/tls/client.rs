@@ -67,14 +67,25 @@ impl TlsClientBuilder {
             attest_self: self.attest_self,
         };
         if c.attest_self {
+            log::debug!("[PERF] Starting private key generation...");
             let privkey = DefaultCrypto::gen_private_key(crate::crypto::AsymmetricAlgo::Rsa2048)?;
+            log::debug!("[PERF] Private key generation completed");
+            
+            log::debug!("[PERF] Starting use_privkey...");
             c.use_privkey(&privkey)?;
+            log::debug!("[PERF] use_privkey completed");
+            
+            log::debug!("[PERF] Starting CertBuilder::build_with_private_key...");
             let cert = CertBuilder::new(AutoAttester::new(), HashAlgo::Sha256)
                 .with_claims(self.custom_claims.unwrap())
                 .build_with_private_key(&privkey)
                 .await?
                 .cert_to_der()?;
+            log::debug!("[PERF] CertBuilder::build_with_private_key completed");
+            
+            log::debug!("[PERF] Starting use_cert...");
             c.use_cert(&cert)?;
+            log::debug!("[PERF] use_cert completed");
         }
         Ok(c)
     }
