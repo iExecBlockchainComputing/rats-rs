@@ -68,7 +68,7 @@ impl TlsClientBuilder {
         };
         if c.attest_self {
             log::debug!("[PERF] Starting private key generation...");
-            let privkey = DefaultCrypto::gen_private_key(crate::crypto::AsymmetricAlgo::Rsa2048)?;
+            let privkey = DefaultCrypto::gen_private_key(crate::crypto::AsymmetricAlgo::P256)?;
             log::debug!("[PERF] Private key generation completed");
             
             log::debug!("[PERF] Starting use_privkey...");
