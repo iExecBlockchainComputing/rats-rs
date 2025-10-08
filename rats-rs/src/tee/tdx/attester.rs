@@ -48,14 +48,14 @@ impl GenericAttester for TdxAttester {
 
         #[cfg(not(feature = "async-tokio"))]
         {
-            log::info!("[PERF] Starting TDX quote generation (sync)...");
+            log::debug!("Starting TDX quote generation (sync)...");
             (result, quote) = tdx_attest_rs::tdx_att_get_quote(
                 Some(&tdx_report_data),
                 None,
                 Some(&mut selected_att_key_id),
                 0,
             );
-            log::info!("[PERF] TDX quote generation (sync) ended");
+            log::debug!("TDX quote generation (sync) ended");
         }
 
         if result != tdx_attest_rs::tdx_attest_error_t::TDX_ATTEST_SUCCESS {
