@@ -46,6 +46,7 @@ pub struct TlsClientBuilder {
     verify: SSL_verify_cb,
     stream: Option<Box<dyn GetFd>>,
     attest_self: bool,
+    verify_peer: bool,
     custom_claims: Option<Claims>,
 }
 
@@ -60,7 +61,15 @@ impl TlsClientBuilder {
         let mut c = Client {
             ctx: ctx,
             ssl_session: None,
-            verify_callback: Some(self.verify.unwrap_or(verify_certificate_default)),
+            verify_callback: if self.verify_peer {
+                if self.verify.is_some() {
+                    self.verify
+                } else {
+                    Some(verify_certificate_default)
+                }
+            } else {
+                None
+            },
             stream: self
                 .stream
                 .ok_or(Error::kind(ErrorKind::OsslTlsBuilderStreamUnset))?,
@@ -93,6 +102,10 @@ impl TlsClientBuilder {
         self.verify = verify;
         self
     }
+    pub fn with_verify_peer(mut self, verify_peer: bool) -> Self {
+        self.verify_peer = verify_peer;
+        self
+    }
     pub fn with_tcp_stream(mut self, stream: TcpStream) -> Self {
         self.stream = Some(Box::new(TcpWrapper(stream)));
         self
@@ -110,6 +123,7 @@ impl TlsClientBuilder {
             verify: None,
             stream: None,
             attest_self: false,
+            verify_peer: false,
             custom_claims: None,
         }
     }
