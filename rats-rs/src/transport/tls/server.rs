@@ -325,7 +325,7 @@ mod tests {
             verify_callback: None,
             stream: Box::new(GetFdDumpImpl),
         };
-        let privkey = DefaultCrypto::gen_private_key(AsymmetricAlgo::Rsa2048)?;
+        let privkey = DefaultCrypto::gen_private_key(AsymmetricAlgo::P256)?;
         let binding = privkey.to_pkcs8_pem()?;
         let privpem = binding.as_bytes();
         s.use_privkey(&privkey)?;
