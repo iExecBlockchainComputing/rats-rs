@@ -68,7 +68,7 @@ impl TlsServerBuilder {
                 .stream
                 .ok_or(Error::kind(ErrorKind::OsslTlsBuilderStreamUnset))?,
         };
-        let privkey = DefaultCrypto::gen_private_key(crate::crypto::AsymmetricAlgo::Rsa2048)?;
+        let privkey = DefaultCrypto::gen_private_key(crate::crypto::AsymmetricAlgo::P256)?;
         s.use_privkey(&privkey)?;
         let cert = CertBuilder::new(AutoAttester::new(), HashAlgo::Sha256)
             .build_with_private_key(&privkey)
