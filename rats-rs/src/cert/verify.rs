@@ -69,7 +69,7 @@ impl CertVerifier {
     }
 }
 
-pub(crate) fn verify_cert_der(cert: &[u8]) -> Result<Claims> {
+pub fn verify_cert_der(cert: &[u8]) -> Result<Claims> {
     let cert = Certificate::from_der(cert)
         .kind(ErrorKind::ParseCertError)
         .context("failed to parse certificate from der")?;
