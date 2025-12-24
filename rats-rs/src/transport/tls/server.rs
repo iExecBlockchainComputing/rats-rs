@@ -6,7 +6,7 @@ use crate::{
     cert::{create::CertBuilder, dice::cbor::parse_evidence_buffer_with_tag},
     crypto::{AsymmetricPrivateKey, DefaultCrypto, HashAlgo},
     errors::*,
-    tee::{sgx_dcap::evidence, AutoAttester, GenericVerifier},
+    tee::{sgx_dcap::evidence, AutoAttester, GenericVerifier, claims::Claims},
     transport::{GenericSecureTransPort, GenericSecureTransPortRead, GenericSecureTransPortWrite},
 };
 use lazy_static::lazy_static;
@@ -42,6 +42,7 @@ pub struct TlsServerBuilder {
     verify: SSL_verify_cb,
     stream: Option<Box<dyn GetFd>>,
     verify_peer: bool,
+    custom_claims: Option<Claims>,
 }
 
 impl TlsServerBuilder {
@@ -71,6 +72,7 @@ impl TlsServerBuilder {
         let privkey = DefaultCrypto::gen_private_key(crate::crypto::AsymmetricAlgo::P256)?;
         s.use_privkey(&privkey)?;
         let cert = CertBuilder::new(AutoAttester::new(), HashAlgo::Sha256)
+            .with_claims(self.custom_claims.unwrap())
             .build_with_private_key(&privkey)
             .await?
             .cert_to_der()?;
@@ -82,7 +84,12 @@ impl TlsServerBuilder {
             verify: None,
             stream: None,
             verify_peer: false,
+            custom_claims: None,
         }
+    }
+    pub fn with_custom_claims(mut self, claims: Claims) -> Self {
+        self.custom_claims = Some(claims);
+        self
     }
     pub fn with_verify(mut self, verify: SSL_verify_cb) -> Self {
         self.verify = verify;
