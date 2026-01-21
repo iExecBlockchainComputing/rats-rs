@@ -1,4 +1,4 @@
-use super::RatsClientVerifier;
+use super::{RatsClientVerifier, VerifyCallback};
 use crate::cert::create::CertBuilder;
 use crate::crypto::{DefaultCrypto, HashAlgo};
 use crate::errors::Result;
@@ -178,6 +178,7 @@ pub struct RustlsServerBuilder {
     stream: TcpStream,
     verify_peer: bool,
     custom_claims: Option<Claims>,
+    verify_callback: Option<VerifyCallback>,
 }
 
 impl RustlsServerBuilder {
@@ -187,6 +188,7 @@ impl RustlsServerBuilder {
             stream,
             verify_peer: false,
             custom_claims: None,
+            verify_callback: None,
         }
     }
 
@@ -202,6 +204,18 @@ impl RustlsServerBuilder {
     /// evidence and can be verified by the client.
     pub fn with_custom_claims(mut self, claims: Claims) -> Self {
         self.custom_claims = Some(claims);
+        self
+    }
+
+    /// Sets a custom verification callback that is called after RA-TLS verification.
+    ///
+    /// The callback receives the extracted claims from the client's certificate
+    /// and can perform additional validation (e.g., check specific RTMR values,
+    /// verify appId, etc.).
+    ///
+    /// Only used when `verify_peer` is true (mutual attestation).
+    pub fn with_verify_callback(mut self, callback: VerifyCallback) -> Self {
+        self.verify_callback = Some(callback);
         self
     }
 
@@ -241,6 +255,7 @@ impl RustlsServerBuilder {
                         root
                     }))
                     .build()?,
+                    callback: self.verify_callback,
                 }))
                 .with_single_cert(vec![cert.into()], tmp.into())?
         } else {

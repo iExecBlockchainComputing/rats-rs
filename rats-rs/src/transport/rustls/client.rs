@@ -1,4 +1,4 @@
-use super::RatsServerVerifier;
+use super::{RatsServerVerifier, VerifyCallback};
 use crate::cert::create::CertBuilder;
 use crate::crypto::{DefaultCrypto, HashAlgo};
 use crate::errors::Result;
@@ -229,6 +229,7 @@ pub struct RustlsClientBuilder {
     attest_self: bool,
     verify_peer: bool,
     custom_claims: Option<Claims>,
+    verify_callback: Option<VerifyCallback>,
 }
 
 impl RustlsClientBuilder {
@@ -239,6 +240,7 @@ impl RustlsClientBuilder {
             attest_self: false,
             verify_peer: true, // Default to verifying server certificate
             custom_claims: None,
+            verify_callback: None,
         }
     }
 
@@ -266,6 +268,37 @@ impl RustlsClientBuilder {
     /// evidence and can be verified by the server.
     pub fn with_custom_claims(mut self, claims: Claims) -> Self {
         self.custom_claims = Some(claims);
+        self
+    }
+
+    /// Sets a custom verification callback that is called after RA-TLS verification.
+    ///
+    /// The callback receives the extracted claims from the server's certificate
+    /// and can perform additional validation (e.g., check specific RTMR values,
+    /// verify appId, etc.).
+    ///
+    /// # Example
+    /// ```ignore
+    /// use std::sync::Arc;
+    ///
+    /// let client = RustlsClientBuilder::new("127.0.0.1:8080")
+    ///     .with_verify_peer(true)
+    ///     .with_verify_callback(Arc::new(|claims| {
+    ///         // Extract and log RTMR0
+    ///         if let Some(rtmr0) = claims.get("tdx_rt_mr0") {
+    ///             println!("Server RTMR0: {}", hex::encode(rtmr0));
+    ///         }
+    ///         // Extract and verify appId
+    ///         if let Some(app_id) = claims.get("appId") {
+    ///             println!("Server appId: {}", String::from_utf8_lossy(app_id));
+    ///         }
+    ///         Ok(()) // Accept the certificate
+    ///     }))
+    ///     .build()
+    ///     .await?;
+    /// ```
+    pub fn with_verify_callback(mut self, callback: VerifyCallback) -> Self {
+        self.verify_callback = Some(callback);
         self
     }
 
@@ -317,6 +350,7 @@ impl RustlsClientBuilder {
                         root
                     }))
                     .build()?,
+                    callback: self.verify_callback,
                 }));
         } else {
             // No verification - INSECURE, for testing only

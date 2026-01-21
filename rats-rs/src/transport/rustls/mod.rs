@@ -85,10 +85,9 @@
 //! }
 //! ```
 
-use crate::cert::verify::CertVerifier;
-use crate::cert::verify::VerifiyPolicy::Contains;
-use crate::cert::verify::VerifyPolicyOutput;
+use crate::cert::verify::verify_cert_der;
 use crate::tee::claims::Claims;
+use log::{debug, error, info};
 use std::sync::Arc;
 use tokio_rustls::rustls::client::danger::HandshakeSignatureValid;
 use tokio_rustls::rustls::client::danger::ServerCertVerified;
@@ -107,17 +106,55 @@ pub mod server;
 pub use client::{ClientTlsStream, RustlsClient, RustlsClientBuilder};
 pub use server::{RustlsServer, RustlsServerBuilder, ServerTlsStream};
 
+// Re-export callback type for user convenience
+pub use self::VerifyCallback;
+
 // Re-export tokio types for convenience
 pub use tokio::net::TcpStream;
 
-#[derive(Debug)]
+/// Callback type for custom verification logic.
+/// 
+/// The callback receives the extracted claims from the peer's certificate
+/// and should return `Ok(())` to accept or `Err(reason)` to reject.
+/// 
+/// # Example
+/// ```ignore
+/// let callback: VerifyCallback = Arc::new(|claims| {
+///     if let Some(rtmr0) = claims.get("tdx_rt_mr0") {
+///         println!("RTMR0: {}", hex::encode(rtmr0));
+///     }
+///     if let Some(app_id) = claims.get("appId") {
+///         println!("AppId: {}", String::from_utf8_lossy(app_id));
+///     }
+///     Ok(()) // Accept the certificate
+/// });
+/// ```
+pub type VerifyCallback = Arc<dyn Fn(&Claims) -> Result<(), String> + Send + Sync>;
+
 struct RatsClientVerifier {
     default_client_verifier: Arc<dyn ClientCertVerifier>,
+    callback: Option<VerifyCallback>,
 }
 
-#[derive(Debug)]
+impl std::fmt::Debug for RatsClientVerifier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RatsClientVerifier")
+            .field("has_callback", &self.callback.is_some())
+            .finish()
+    }
+}
+
 struct RatsServerVerifier {
     default_server_verifier: Arc<WebPkiServerVerifier>,
+    callback: Option<VerifyCallback>,
+}
+
+impl std::fmt::Debug for RatsServerVerifier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RatsServerVerifier")
+            .field("has_callback", &self.callback.is_some())
+            .finish()
+    }
 }
 
 impl ClientCertVerifier for RatsClientVerifier {
@@ -131,22 +168,30 @@ impl ClientCertVerifier for RatsClientVerifier {
         _intermediates: &[tokio_rustls::rustls::pki_types::CertificateDer<'_>],
         _now: tokio_rustls::rustls::pki_types::UnixTime,
     ) -> Result<tokio_rustls::rustls::server::danger::ClientCertVerified, Error> {
-        let res = CertVerifier::new(Contains(Claims::new())).verify(&end_entity);
-        match res {
-            Ok(VerifyPolicyOutput::Passed) => {
-                return Ok(ClientCertVerified::assertion());
-            }
-            Ok(VerifyPolicyOutput::Failed) => {
-                return Err(Error::General(
-                    "Verify failed because of claims".to_string(),
-                ));
+        debug!("Verifying client certificate (RA-TLS)...");
+        
+        // Verify the certificate and extract claims
+        let claims = match verify_cert_der(end_entity.as_ref()) {
+            Ok(claims) => {
+                info!("Client certificate verification successful!");
+                claims
             }
             Err(err) => {
-                return Err(Error::General(
-                    format!("Verify failed with err: {:?}", err).to_string(),
-                ));
+                error!("Client certificate verification failed: {:?}", err);
+                return Err(Error::General(format!("Verify failed: {:?}", err)));
             }
+        };
+
+        // Call user callback if provided
+        if let Some(callback) = &self.callback {
+            if let Err(reason) = callback(&claims) {
+                error!("Client certificate rejected by callback: {}", reason);
+                return Err(Error::General(format!("Rejected by callback: {}", reason)));
+            }
+            debug!("Client certificate accepted by callback");
         }
+
+        Ok(ClientCertVerified::assertion())
     }
 
     fn verify_tls12_signature(
@@ -184,22 +229,30 @@ impl ServerCertVerifier for RatsServerVerifier {
         _now: tokio_rustls::rustls::pki_types::UnixTime,
     ) -> Result<tokio_rustls::rustls::client::danger::ServerCertVerified, tokio_rustls::rustls::Error>
     {
-        let res = CertVerifier::new(Contains(Claims::new())).verify(&end_entity);
-        match res {
-            Ok(VerifyPolicyOutput::Passed) => {
-                return Ok(ServerCertVerified::assertion());
-            }
-            Ok(VerifyPolicyOutput::Failed) => {
-                return Err(Error::General(
-                    "Verify failed because of claims".to_string(),
-                ));
+        debug!("Verifying server certificate (RA-TLS)...");
+        
+        // Verify the certificate and extract claims
+        let claims = match verify_cert_der(end_entity.as_ref()) {
+            Ok(claims) => {
+                info!("Server certificate verification successful!");
+                claims
             }
             Err(err) => {
-                return Err(Error::General(
-                    format!("Verify failed with err: {:?}", err).to_string(),
-                ));
+                error!("Server certificate verification failed: {:?}", err);
+                return Err(Error::General(format!("Verify failed: {:?}", err)));
             }
+        };
+
+        // Call user callback if provided
+        if let Some(callback) = &self.callback {
+            if let Err(reason) = callback(&claims) {
+                error!("Server certificate rejected by callback: {}", reason);
+                return Err(Error::General(format!("Rejected by callback: {}", reason)));
+            }
+            debug!("Server certificate accepted by callback");
         }
+
+        Ok(ServerCertVerified::assertion())
     }
 
     fn verify_tls12_signature(
