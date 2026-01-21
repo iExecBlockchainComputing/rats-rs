@@ -12,10 +12,63 @@ use std::sync::Arc;
 use tokio::io::{split, AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf};
 use tokio::net::TcpStream;
 use tokio_rustls::client::TlsStream;
+use tokio_rustls::rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 use tokio_rustls::rustls::client::WebPkiServerVerifier;
-use tokio_rustls::rustls::pki_types::{IpAddr as RustlsIpAddr, PrivatePkcs8KeyDer, ServerName};
-use tokio_rustls::rustls::{self, pki_types, ClientConfig};
+use tokio_rustls::rustls::pki_types::{CertificateDer, IpAddr as RustlsIpAddr, PrivatePkcs8KeyDer, ServerName, UnixTime};
+use tokio_rustls::rustls::{self, pki_types, ClientConfig, DigitallySignedStruct, SignatureScheme};
 use tokio_rustls::TlsConnector;
+
+/// A certificate verifier that accepts any certificate.
+/// **WARNING**: This is insecure and should only be used for testing.
+#[derive(Debug)]
+struct NoServerVerifier;
+
+impl ServerCertVerifier for NoServerVerifier {
+    fn verify_server_cert(
+        &self,
+        _end_entity: &CertificateDer<'_>,
+        _intermediates: &[CertificateDer<'_>],
+        _server_name: &ServerName<'_>,
+        _ocsp_response: &[u8],
+        _now: UnixTime,
+    ) -> std::result::Result<ServerCertVerified, rustls::Error> {
+        // Accept any certificate without verification
+        Ok(ServerCertVerified::assertion())
+    }
+
+    fn verify_tls12_signature(
+        &self,
+        _message: &[u8],
+        _cert: &CertificateDer<'_>,
+        _dss: &DigitallySignedStruct,
+    ) -> std::result::Result<HandshakeSignatureValid, rustls::Error> {
+        Ok(HandshakeSignatureValid::assertion())
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        _message: &[u8],
+        _cert: &CertificateDer<'_>,
+        _dss: &DigitallySignedStruct,
+    ) -> std::result::Result<HandshakeSignatureValid, rustls::Error> {
+        Ok(HandshakeSignatureValid::assertion())
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+        vec![
+            SignatureScheme::RSA_PKCS1_SHA256,
+            SignatureScheme::RSA_PKCS1_SHA384,
+            SignatureScheme::RSA_PKCS1_SHA512,
+            SignatureScheme::RSA_PSS_SHA256,
+            SignatureScheme::RSA_PSS_SHA384,
+            SignatureScheme::RSA_PSS_SHA512,
+            SignatureScheme::ECDSA_NISTP256_SHA256,
+            SignatureScheme::ECDSA_NISTP384_SHA384,
+            SignatureScheme::ECDSA_NISTP521_SHA512,
+            SignatureScheme::ED25519,
+        ]
+    }
+}
 
 /// Re-export the TlsStream type for HTTP integration
 pub use tokio_rustls::client::TlsStream as ClientTlsStream;
@@ -174,6 +227,7 @@ impl RustlsClient {
 pub struct RustlsClientBuilder {
     addr: String,
     attest_self: bool,
+    verify_peer: bool,
     custom_claims: Option<Claims>,
 }
 
@@ -183,6 +237,7 @@ impl RustlsClientBuilder {
         Self {
             addr: addr.to_string(),
             attest_self: false,
+            verify_peer: true, // Default to verifying server certificate
             custom_claims: None,
         }
     }
@@ -190,6 +245,18 @@ impl RustlsClientBuilder {
     /// Sets whether the client should attest itself to the server (mutual attestation).
     pub fn with_attest_self(mut self, attest_self: bool) -> Self {
         self.attest_self = attest_self;
+        self
+    }
+
+    /// Sets whether the client should verify the server's RA-TLS certificate.
+    ///
+    /// When enabled (default), the client verifies that the server is running
+    /// in a genuine TEE by checking the attestation evidence in its certificate.
+    ///
+    /// **Warning**: Disabling this removes TEE attestation verification and
+    /// should only be used for testing purposes.
+    pub fn with_verify_peer(mut self, verify_peer: bool) -> Self {
+        self.verify_peer = verify_peer;
         self
     }
 
@@ -229,25 +296,34 @@ impl RustlsClientBuilder {
             config_builder.with_no_client_auth()
         };
 
-        // Set up RA-TLS certificate verifier
         let mut config = config;
-        config
-            .dangerous()
-            .set_certificate_verifier(Arc::new(RatsServerVerifier {
-                default_server_verifier: WebPkiServerVerifier::builder(Arc::new({
-                    // XXX: only to bypass empty test of WebPkiServerVerifier
-                    let mut root = rustls::RootCertStore::empty();
-                    let privkey =
-                        DefaultCrypto::gen_private_key(crate::crypto::AsymmetricAlgo::Rsa2048)?;
-                    let cert = CertBuilder::new(AutoAttester::new(), HashAlgo::Sha256)
-                        .build_with_private_key(&privkey)
-                        .await?
-                        .cert_to_der()?;
-                    root.add(cert.into())?;
-                    root
-                }))
-                .build()?,
-            }));
+
+        // Set up certificate verifier based on verify_peer setting
+        if self.verify_peer {
+            // RA-TLS certificate verifier - verifies TEE attestation
+            config
+                .dangerous()
+                .set_certificate_verifier(Arc::new(RatsServerVerifier {
+                    default_server_verifier: WebPkiServerVerifier::builder(Arc::new({
+                        // XXX: only to bypass empty test of WebPkiServerVerifier
+                        let mut root = rustls::RootCertStore::empty();
+                        let privkey =
+                            DefaultCrypto::gen_private_key(crate::crypto::AsymmetricAlgo::Rsa2048)?;
+                        let cert = CertBuilder::new(AutoAttester::new(), HashAlgo::Sha256)
+                            .build_with_private_key(&privkey)
+                            .await?
+                            .cert_to_der()?;
+                        root.add(cert.into())?;
+                        root
+                    }))
+                    .build()?,
+                }));
+        } else {
+            // No verification - INSECURE, for testing only
+            config
+                .dangerous()
+                .set_certificate_verifier(Arc::new(NoServerVerifier));
+        }
 
         Ok(RustlsClient {
             connector: TlsConnector::from(Arc::new(config)),
