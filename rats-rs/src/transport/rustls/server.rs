@@ -175,17 +175,74 @@ impl RustlsServer {
 ///     .await?;
 /// ```
 pub struct RustlsServerBuilder {
-    stream: TcpStream,
+    stream: Option<TcpStream>,
     verify_peer: bool,
     custom_claims: Option<Claims>,
     verify_callback: Option<VerifyCallback>,
+}
+
+/// A reusable TLS acceptor for RA-TLS connections.
+///
+/// This struct holds a pre-configured `TlsAcceptor` with the RA-TLS certificate
+/// already generated. Use this to avoid regenerating TDX quotes for each connection.
+///
+/// # Example
+/// ```ignore
+/// use rats_rs::transport::rustls::RustlsServerBuilder;
+/// use tokio::net::TcpListener;
+///
+/// // Generate certificate ONCE at startup
+/// let acceptor = RustlsServerBuilder::new_acceptor()
+///     .with_custom_claims(claims)
+///     .build_acceptor()
+///     .await?;
+///
+/// // Reuse for all connections
+/// loop {
+///     let (stream, addr) = listener.accept().await?;
+///     let tls_stream = acceptor.accept(stream).await?;
+///     // Use tls_stream...
+/// }
+/// ```
+#[derive(Clone)]
+pub struct RustlsAcceptor {
+    inner: TlsAcceptor,
+}
+
+impl RustlsAcceptor {
+    /// Accepts a TLS connection on the provided TCP stream.
+    ///
+    /// This performs the TLS handshake (RA-TLS negotiation) using the
+    /// pre-generated certificate.
+    pub async fn accept(&self, stream: TcpStream) -> Result<TlsStream<TcpStream>> {
+        let tls_stream = self.inner.accept(stream).await?;
+        Ok(tls_stream)
+    }
+
+    /// Returns a reference to the underlying `TlsAcceptor`.
+    pub fn inner(&self) -> &TlsAcceptor {
+        &self.inner
+    }
 }
 
 impl RustlsServerBuilder {
     /// Creates a new builder for the specified TCP stream.
     pub fn new(stream: TcpStream) -> Self {
         Self {
-            stream,
+            stream: Some(stream),
+            verify_peer: false,
+            custom_claims: None,
+            verify_callback: None,
+        }
+    }
+
+    /// Creates a new builder for building only a `RustlsAcceptor`.
+    ///
+    /// Use this when you want to generate the RA-TLS certificate once
+    /// and reuse it for multiple connections.
+    pub fn new_acceptor() -> Self {
+        Self {
+            stream: None,
             verify_peer: false,
             custom_claims: None,
             verify_callback: None,
@@ -219,14 +276,44 @@ impl RustlsServerBuilder {
         self
     }
 
-    /// Builds the `RustlsServer`.
+    /// Builds a reusable `RustlsAcceptor` for accepting multiple connections.
+    ///
+    /// The RA-TLS certificate (including TDX quote) is generated once during this call.
+    /// The returned acceptor can be cloned and used to accept multiple connections
+    /// without regenerating the certificate.
+    ///
+    /// # Example
+    /// ```ignore
+    /// let acceptor = RustlsServerBuilder::new_acceptor()
+    ///     .with_custom_claims(claims)
+    ///     .build_acceptor()
+    ///     .await?;
+    ///
+    /// loop {
+    ///     let (stream, addr) = listener.accept().await?;
+    ///     let acceptor = acceptor.clone();
+    ///     tokio::spawn(async move {
+    ///         let tls_stream = acceptor.accept(stream).await?;
+    ///         // Handle connection...
+    ///     });
+    /// }
+    /// ```
     #[maybe_async]
-    pub async fn build(self) -> Result<RustlsServer> {
+    pub async fn build_acceptor(self) -> Result<RustlsAcceptor> {
+        let config = self.build_server_config().await?;
+        Ok(RustlsAcceptor {
+            inner: TlsAcceptor::from(Arc::new(config)),
+        })
+    }
+
+    /// Internal method to build the ServerConfig.
+    #[maybe_async]
+    async fn build_server_config(&self) -> Result<ServerConfig> {
         let privkey = DefaultCrypto::gen_private_key(crate::crypto::AsymmetricAlgo::P256)?;
 
         let cert_builder = CertBuilder::new(AutoAttester::new(), HashAlgo::Sha256);
-        let cert_builder = if let Some(claims) = self.custom_claims {
-            cert_builder.with_claims(claims)
+        let cert_builder = if let Some(ref claims) = self.custom_claims {
+            cert_builder.with_claims(claims.clone())
         } else {
             cert_builder.with_claims(Claims::new())
         };
@@ -255,7 +342,7 @@ impl RustlsServerBuilder {
                         root
                     }))
                     .build()?,
-                    callback: self.verify_callback,
+                    callback: self.verify_callback.clone(),
                 }))
                 .with_single_cert(vec![cert.into()], tmp.into())?
         } else {
@@ -264,9 +351,26 @@ impl RustlsServerBuilder {
                 .with_single_cert(vec![cert.into()], tmp.into())?
         };
 
+        Ok(config)
+    }
+
+    /// Builds the `RustlsServer`.
+    ///
+    /// Note: This generates a new certificate for each call. For better performance
+    /// with multiple connections, use `build_acceptor()` instead to generate the
+    /// certificate once and reuse it.
+    #[maybe_async]
+    pub async fn build(mut self) -> Result<RustlsServer> {
+        // Take stream first before borrowing self
+        let stream = self.stream.take().ok_or_else(|| {
+            crate::errors::Error::kind(crate::errors::ErrorKind::TransportStreamNotAvailable)
+        })?;
+
+        let config = self.build_server_config().await?;
+
         Ok(RustlsServer {
             acceptor: TlsAcceptor::from(Arc::new(config)),
-            stream: Some(self.stream),
+            stream: Some(stream),
             state: None,
         })
     }

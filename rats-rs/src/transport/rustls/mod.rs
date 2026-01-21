@@ -46,11 +46,13 @@
 //! let res = sender.send_request(req).await?;
 //! ```
 //!
-//! ## Server Example with Axum
+//! ## Server Example with Axum (Optimized)
+//!
+//! This example generates the RA-TLS certificate **once** at startup and reuses
+//! it for all connections, avoiding expensive TDX quote generation per connection.
 //!
 //! ```ignore
-//! use rats_rs::transport::rustls::{RustlsServerBuilder, ServerTlsStream};
-//! use rats_rs::transport::GenericSecureTransPort;
+//! use rats_rs::transport::rustls::{RustlsServerBuilder, RustlsAcceptor};
 //! use axum::{Router, routing::get};
 //! use hyper_util::rt::TokioIo;
 //! use hyper::server::conn::http1;
@@ -58,26 +60,23 @@
 //! let listener = TcpListener::bind("0.0.0.0:8080").await?;
 //! let app = Router::new().route("/secret", get(get_secret));
 //!
+//! // Generate certificate ONCE at startup (TDX quote is generated here!)
+//! let acceptor = RustlsServerBuilder::new_acceptor()
+//!     .with_custom_claims(claims)
+//!     .build_acceptor()
+//!     .await?;
+//!
 //! loop {
 //!     let (stream, addr) = listener.accept().await?;
+//!     let acceptor = acceptor.clone();
+//!     let router = app.clone();
 //!     
-//!     // Create and configure the RA-TLS server
-//!     let mut server = RustlsServerBuilder::new(stream)
-//!         .with_verify_peer(false) // or true for mutual attestation
-//!         .with_custom_claims(claims)
-//!         .build()
-//!         .await?;
-//!     
-//!     // Perform RA-TLS negotiation (TEE attestation happens here!)
-//!     server.negotiate().await?;
-//!     
-//!     // Take the stream for HTTP use
-//!     let tls_stream = server.into_stream()?;
-//!     let io = TokioIo::new(tls_stream);
-//!     
-//!     // Serve with hyper
-//!     let service = app.clone();
 //!     tokio::spawn(async move {
+//!         // Perform RA-TLS handshake using pre-generated certificate
+//!         let tls_stream = acceptor.accept(stream).await?;
+//!         let io = TokioIo::new(tls_stream);
+//!         
+//!         // Serve with hyper
 //!         http1::Builder::new()
 //!             .serve_connection(io, service)
 //!             .await
@@ -104,7 +103,7 @@ pub mod server;
 
 // Re-export main types
 pub use client::{ClientTlsStream, RustlsClient, RustlsClientBuilder};
-pub use server::{RustlsServer, RustlsServerBuilder, ServerTlsStream};
+pub use server::{RustlsAcceptor, RustlsServer, RustlsServerBuilder, ServerTlsStream};
 
 // Re-export tokio types for convenience
 pub use tokio::net::TcpStream;
