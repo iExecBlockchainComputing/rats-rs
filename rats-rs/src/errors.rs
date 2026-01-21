@@ -100,6 +100,15 @@ pub enum ErrorKind {
 
     OsslInitializeFail,
 
+    /// The transport stream has already been split for read/write operations
+    /// and cannot be taken as a whole stream for HTTP integration.
+    TransportStreamAlreadySplit,
+
+    /// The transport stream is not available. This can happen if:
+    /// - negotiate() hasn't been called yet
+    /// - The stream has already been taken via into_stream() or take_stream()
+    TransportStreamNotAvailable,
+
     Unknown,
 }
 
