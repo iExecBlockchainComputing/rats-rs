@@ -106,9 +106,6 @@ pub mod server;
 pub use client::{ClientTlsStream, RustlsClient, RustlsClientBuilder};
 pub use server::{RustlsServer, RustlsServerBuilder, ServerTlsStream};
 
-// Re-export callback type for user convenience
-pub use self::VerifyCallback;
-
 // Re-export tokio types for convenience
 pub use tokio::net::TcpStream;
 
