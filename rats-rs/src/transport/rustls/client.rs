@@ -276,7 +276,7 @@ impl RustlsClientBuilder {
             .with_root_certificates(Arc::new(rustls::RootCertStore::empty()));
 
         let config = if self.attest_self {
-            let privkey = DefaultCrypto::gen_private_key(crate::crypto::AsymmetricAlgo::Rsa2048)?;
+            let privkey = DefaultCrypto::gen_private_key(crate::crypto::AsymmetricAlgo::P256)?;
 
             let cert_builder = CertBuilder::new(AutoAttester::new(), HashAlgo::Sha256);
             let cert_builder = if let Some(claims) = self.custom_claims {
@@ -308,7 +308,7 @@ impl RustlsClientBuilder {
                         // XXX: only to bypass empty test of WebPkiServerVerifier
                         let mut root = rustls::RootCertStore::empty();
                         let privkey =
-                            DefaultCrypto::gen_private_key(crate::crypto::AsymmetricAlgo::Rsa2048)?;
+                            DefaultCrypto::gen_private_key(crate::crypto::AsymmetricAlgo::P256)?;
                         let cert = CertBuilder::new(AutoAttester::new(), HashAlgo::Sha256)
                             .build_with_private_key(&privkey)
                             .await?
